@@ -1,0 +1,434 @@
+---
+title: "Panel plots in R"
+author: "Joyce Robbins"
+output:
+  slidy_presentation:
+    fig_height: 4
+    fig_width: 6
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, cache = TRUE,
+                      fig.align = 'center')
+```
+
+## Agenda
+
+* Basic faceting in `ggplot2`
+  
+* When to free scales
+
+* Getting data in the right form
+
+* Plotting one variable per panel
+
+* Design decisions with multiple variables
+
+* Scatterplot matrices
+
+Slides: www.github.com/jtr13/PanelPlots/NYCASAMetro.pdf
+
+Code: www.github.com/jtr13/PanelPlots/NYCASAMetro.Rmd
+
+## Without faceting
+
+```{r}
+library(tidyverse)
+g <- ggplot(iris, aes(Sepal.Length, Sepal.Width)) + geom_point()
+g
+```
+
+## Facet on one variable with `facet_wrap()`
+
+facet "on" Species
+
+```{r}
+g + facet_wrap(~Species)
+```
+
+## Faceting in ggplot2
+
+Each panel represents one categorical group / levels of a factor (type can be factor or character or integer)
+
+```{r}
+glimpse(iris)
+```
+
+
+## Change the layout with `nrow, ncol`
+
+```{r}
+g + facet_wrap(~Species, ncol = 1)
+```
+
+## Add regression lines
+
+
+```{r}
+g + geom_smooth(method = "lm", se = FALSE) + facet_wrap(~Species)
+```
+
+## Facet on two (categorical) variables with `facet_grid()`
+
+```{r}
+ggplot(mtcars, aes(hp,mpg)) + geom_point() + facet_grid(cyl~gear)
+```
+
+## Label variables (in addition to factor levels)
+
+```{r}
+ggplot(mtcars, aes(hp, mpg)) + geom_point() + facet_grid(cyl~gear, labeller = label_both)
+```
+
+
+## Cleveland dot plots
+
+Note that y-axis is discrete
+
+```{r}
+g <- mtcars %>% rownames_to_column("car") %>% 
+  ggplot(aes(mpg, reorder(car, mpg))) + geom_point(color = "blue") + theme_bw() +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) + ylab("")
+g
+```
+
+## Facet by gear
+
+```{r}
+g + facet_grid(gear ~ ., 
+               labeller = label_both)
+```
+
+## "Free" the y scale with `scales = "free_y"`
+
+```{r}
+g + facet_grid(gear ~ ., labeller = label_both, scales = "free_y")
+```
+
+## Change panel heights with `space = "free_y"`
+
+```{r}
+g + facet_grid(gear ~ ., labeller = label_both, scales = "free_y", 
+               space = "free_y")
+```
+
+## In general, do not "free" numerical scales
+
+```{r}
+ggplot(iris, aes(Sepal.Length, Sepal.Width)) +
+  geom_point() + facet_wrap(~Species, scales = "free")
+```
+
+incorrect
+
+## In general, do not "free" numerical scales
+
+```{r}
+ggplot(iris, aes(Sepal.Length, Sepal.Width)) +
+  geom_point() + facet_wrap(~Species)
+```
+
+correct
+
+
+
+## Data must be in the right form to facet
+
+One column of categorical data = one faceting direction
+
+```{r}
+library(ggplot2movies)
+str(movies)
+```
+
+## Facet on `Action` column
+
+```{r}
+movies %>% filter(!is.na(budget)) %>% sample_n(1000) %>% 
+ggplot(aes(budget, length)) + geom_point() +
+  facet_wrap(~Action)
+```
+
+## Transform data
+
+```{r}
+mymovies <- movies %>% 
+  select(title, length, budget, year, mpaa, Action:Short) %>% 
+  gather(key = "genre", value, Action:Short) %>% 
+  filter(value == 1) %>% 
+  select(-value)
+
+head(mymovies)
+```
+
+## Facet on `genre`
+
+```{r}
+lengthorder <- mymovies %>% group_by(genre) %>% summarize(meanlength = mean(length)) %>% arrange(desc(meanlength))
+mymovies %>% filter(!is.na(budget)) %>% 
+  sample_n(1000) %>% 
+ggplot(aes(budget/1000000, length)) + geom_point() +
+  facet_wrap(~factor(genre, levels = lengthorder$genre)) + xlab("budget (in millions)") +
+  geom_hline(data = lengthorder, aes(yintercept = meanlength), color = "red") + 
+  ggtitle ("Length vs. Budget", subtitle = "Red line indicates mean length")
+```
+
+
+## Use facets to look at distributions of numeric variables
+
+```{r}
+newmovies <- movies %>% select(mpaa, year:votes) %>% gather(key = "variable", value, -mpaa) %>% 
+  filter(!is.na(value))
+newmovies %>% sample_n(6)
+```
+
+##
+
+```{r}
+ggplot(newmovies, aes(value)) + geom_histogram(fill = "cornflowerblue") + facet_wrap(~variable, scales = "free")
+```
+
+variables become levels of the new "variable" column
+
+## Facet on `mpaa` and `variable`
+
+```{r}
+ggplot(newmovies, aes(value)) + geom_histogram(fill = "cornflowerblue") + facet_grid(mpaa~variable, scales = "free") + theme_bw()
+```
+
+## One common scale 
+
+Same technique: variables become levels of a new "variable" column
+
+```{r, echo = FALSE}
+byyear <- movies %>% select(title:votes) %>% 
+  mutate(budget_millions = budget/1000000) %>% 
+  select(-budget) %>% 
+  gather(key = "variable", value, -title, -year) %>% 
+  group_by(year, variable) %>% 
+  summarize(mean = mean(value, na.rm = T))
+
+ggplot(byyear, aes(year, mean)) + geom_line() + facet_wrap(~variable, ncol = 1,
+                                                            scales = "free_y") +
+  ggthemes::theme_economist()
+```
+
+
+## Data
+
+```{r, eval = FALSE}
+byyear <- movies %>% select(title:votes) %>% 
+  mutate(budget_millions = budget/1000000) %>% 
+  select(-budget) %>% 
+  gather(key = "variable", value, -title, -year) %>% 
+  group_by(year, variable) %>% 
+  summarize(mean = mean(value, na.rm = T))
+```
+
+```{r}
+glimpse(byyear)
+```
+
+```{r, eval = FALSE}
+ggplot(byyear, aes(year, mean)) + geom_line() + 
+  facet_wrap(~variable, ncol = 1, scales = "free_y") + ggthemes::theme_economist()
+```
+
+
+## Convert numerical to categorical variables
+
+```{r}
+mymovies <- mymovies %>% filter(length <= 180) %>% 
+  mutate(decade = factor(round(year/10)*10))
+
+ggplot(mymovies, aes(length)) + geom_histogram(fill = "cornflowerblue") +
+  facet_wrap(~decade)
+```
+
+## ggridges
+
+```{r}
+library(ggridges)
+
+ggplot(mymovies, aes(x=length, y=fct_rev(decade))) +
+  geom_density_ridges(scale = 1.5, color = "blue", fill = "blue", alpha = .4) +
+  xlab("Length (in minutes)") + 
+  ylab("") +
+  theme_ridges() 
+```
+
+
+## Design choices with multiple variables
+
+x-axis, y-axis, row facets, column facets
+
+color, size, shape
+
+## Think about continuous vs. categorical variables
+
+
+```{r, eval = FALSE, echo = FALSE}
+topmethods <- c("E-mail", "Telephone", "Sales visit", "Web")
+topretailer <- c("Department Store", "Sports Store", "Outdoors Shop")
+toplines <- c("Camping Equipment", "Mountaineering Equipment",
+              "Golf Equipment", "Personal Accessories")
+
+sales <- read_csv("sales.csv") %>% 
+  select(`Order method type`:`Product line`, Revenue, Date) %>% 
+  mutate(Revenue = Revenue / 1000000) %>% 
+  filter(`Order method type` %in% topmethods,
+         `Retailer type` %in% topretailer,
+         `Product line` %in% toplines) %>% 
+  mutate(`Retailer type` = str_remove_all(`Retailer type`, "( Store| Shop)")) %>% 
+  mutate(`Product line` = str_remove_all(`Product line`, "( Equipment| Accessories)"))
+
+write_csv(sales, "sales2.csv")  
+```
+
+```{r}
+sales <- read_csv("sales2.csv")
+glimpse(sales)
+
+```
+
+## Start with one dimension
+
+```{r}
+sales %>% group_by(Date) %>% summarize(SumRev = sum(Revenue)) %>% 
+  ggplot(aes(Date, SumRev)) + geom_line() + ylab("millions $") + ggtitle("Revenue")
+```
+
+## Consider one variable at a time
+
+
+```{r}
+sales %>% group_by(Date, `Product line`) %>% 
+  summarize(SumRev = sum(Revenue)) %>% 
+  ggplot(aes(Date, SumRev, color = fct_reorder2(`Product line`, Date, SumRev))) + geom_line() +
+  scale_x_date(date_labels = "%Y", date_breaks = "1 year")  + ylab("millions $") + ggtitle("Revenue by Product line") +
+  labs(color = "Product line")
+```
+
+
+## Consider one variable at a time
+
+
+```{r}
+sales %>% group_by(Date, `Order method type`) %>% 
+  summarize(SumRev = sum(Revenue)) %>% 
+  ggplot(aes(Date, SumRev, color = fct_reorder2(`Order method type`, Date, SumRev))) + geom_line() +
+  scale_x_date(date_labels = "%Y", date_breaks = "1 year")  + ylab("millions $") + ggtitle("Revenue by Order method type") + 
+  labs(color = "Order method type")
+```
+
+## Consider one variable at a time
+
+
+```{r}
+sales %>% group_by(Date, `Retailer type`) %>% 
+  summarize(SumRev = sum(Revenue)) %>% 
+  ggplot(aes(Date, SumRev, color = fct_reorder2(`Retailer type`, Date, SumRev))) + geom_line() +
+  scale_x_date(date_labels = "%Y", date_breaks = "1 year")  + ylab("millions $") + ggtitle("Revenue by Retailer type") + 
+  labs(color = "Retailer type")
+```
+
+## Add faceting (one dimension)
+
+Reorder factor levels
+
+```{r}
+sales <- sales %>% 
+  mutate(`Product line` = reorder(`Product line`, Revenue, function(x) sum(x)*-1),
+         `Order method type` = reorder(`Order method type`, Revenue, function(x) sum(x)*-1),
+         `Retailer type` = reorder(`Retailer type`, Revenue, function(x) sum(x)*-1))
+```
+
+## Add faceting (one dimension)
+
+```{r}
+sales %>% group_by(Date, `Product line`, `Order method type`) %>% 
+  summarize(SumRev = sum(Revenue))  %>% 
+  ggplot(aes(Date, SumRev, color = `Order method type`)) + geom_line() +
+  scale_x_date(date_labels = "%Y", date_breaks = "1 year") +
+  facet_wrap(~`Product line`) +  ylab("millions $") +
+  theme(legend.position = "bottom") +
+  ggtitle("Revenue, faceted on product line")
+```
+
+
+## Faceting (two dimensions)
+
+```{r}
+sales %>% group_by(Date, `Product line`, `Retailer type`, `Order method type`) %>% 
+  summarize(SumRev = sum(Revenue)) %>% 
+  ggplot(aes(Date, SumRev, color = `Product line`)) + geom_line() +
+  scale_x_date(date_labels = "%Y", date_breaks = "1 year") +
+  facet_grid(`Retailer type`~`Order method type`) +
+  theme_bw() + theme(legend.position = "bottom") +
+  ggtitle("Revenue, faceted on Order method and Retailer type")
+```
+
+## Experiment
+
+```{r}
+sales %>% group_by(Date, `Product line`, `Retailer type`, `Order method type`) %>% 
+  summarize(SumRev = sum(Revenue)) %>% 
+  ggplot(aes(Date, SumRev, color = `Retailer type`)) + geom_line() +
+  scale_x_date(date_labels = "%Y", date_breaks = "1 year") +
+  facet_grid(`Product line`~`Order method type`) +
+  theme_bw() + theme(legend.position = "bottom") +
+  ggtitle("Revenue, faceted on Order method and Product line")
+```
+
+## Experiment
+
+```{r}
+sales %>% group_by(Date, `Product line`, `Retailer type`, `Order method type`) %>% 
+  summarize(SumRev = sum(Revenue)) %>% 
+  ggplot(aes(Date, SumRev, color = `Order method type`)) + geom_line() +
+  scale_x_date(date_labels = "%Y", date_breaks = "1 year") +
+  facet_grid(`Product line`~`Retailer type`) +
+  theme_bw() + theme(legend.position = "bottom") +
+  ggtitle("Revenue, faceted on Retailer type and Product line")
+```
+
+## Scatterplot matrices
+
+Can't create with faceting in `ggplot2`
+
+Options:
+
+`plot()`
+
+`lattice::splom()`
+
+`GGally::ggpairs()`
+
+## Scatterplot matrices
+
+```{r, fig.width = 5, fig.height = 5}
+plot(iris)
+```
+
+## Scatterplot matrices
+
+```{r, fig.width = 5, fig.height = 5}
+lattice::splom(iris)
+```
+
+## Scatterplot matrices
+
+```{r, fig.width = 5, fig.height = 5}
+lattice::splom(iris[,1:4], group = iris$Species,
+               par.settings = list(superpose.symbol = list(pch = 16, cex = .5)), 
+               axis.text.cex = .5, axis.text.col = "grey50", 
+               axis.line.tck = .5, auto.key = TRUE)
+```
+
+## Scatterplot matrices
+
+```{r, fig.width = 5, fig.height = 5}
+GGally::ggpairs(iris, mapping = ggplot2::aes(color = Species))
+```
+
