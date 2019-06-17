@@ -26,9 +26,7 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE, cache = TRUE,
 
 * Scatterplot matrices
 
-Slides: www.github.com/jtr13/PanelPlots/NYCASAMetro.pdf
-
-Code: www.github.com/jtr13/PanelPlots/NYCASAMetro.Rmd
+Slides and code: www.github.com/jtr13/panelplots
 
 ## Without faceting
 
