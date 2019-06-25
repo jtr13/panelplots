@@ -26,7 +26,7 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE, cache = TRUE,
 
 * Scatterplot matrices
 
-Slides and code: www.github.com/jtr13/panelplots
+Slides and code: https://www.github.com/jtr13/panelplots
 
 ## Without faceting
 
